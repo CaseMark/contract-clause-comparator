@@ -1,0 +1,169 @@
+import { pgTable, text, integer, real, boolean, timestamp } from 'drizzle-orm/pg-core';
+import { relations } from 'drizzle-orm';
+
+// Organizations table
+export const organizations = pgTable('organizations', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  vaultId: text('vault_id'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Contracts table
+export const contracts = pgTable('contracts', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  name: text('name').notNull(),
+  filename: text('filename').notNull(),
+  objectId: text('object_id'),
+  contentType: text('content_type'),
+  rawText: text('raw_text'),
+  ingestionStatus: text('ingestion_status').notNull().default('pending'),
+  isTemplate: boolean('is_template').notNull().default(false),
+  templateType: text('template_type'),
+  uploadedAt: timestamp('uploaded_at', { withTimezone: true }).notNull().defaultNow(),
+  processedAt: timestamp('processed_at', { withTimezone: true }),
+});
+
+// Clauses table
+export const clauses = pgTable('clauses', {
+  id: text('id').primaryKey(),
+  contractId: text('contract_id').notNull().references(() => contracts.id, { onDelete: 'cascade' }),
+  clauseType: text('clause_type').notNull(),
+  title: text('title'),
+  content: text('content').notNull(),
+  startPosition: integer('start_position'),
+  endPosition: integer('end_position'),
+  pageNumber: integer('page_number'),
+  confidenceScore: real('confidence_score'),
+  extractedAt: timestamp('extracted_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Comparisons table
+export const comparisons = pgTable('comparisons', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  name: text('name'),
+  sourceContractId: text('source_contract_id').notNull().references(() => contracts.id),
+  targetContractId: text('target_contract_id').notNull().references(() => contracts.id),
+  comparisonType: text('comparison_type'),
+  comparisonStatus: text('comparison_status').notNull().default('pending'), // 'pending', 'processing', 'completed', 'failed'
+  overallRiskScore: real('overall_risk_score'),
+  summary: text('summary'),
+  errorMessage: text('error_message'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  completedAt: timestamp('completed_at', { withTimezone: true }),
+});
+
+// Clause Comparisons table
+export const clauseComparisons = pgTable('clause_comparisons', {
+  id: text('id').primaryKey(),
+  comparisonId: text('comparison_id').notNull().references(() => comparisons.id, { onDelete: 'cascade' }),
+  clauseType: text('clause_type').notNull(),
+  sourceClauseId: text('source_clause_id').references(() => clauses.id),
+  targetClauseId: text('target_clause_id').references(() => clauses.id),
+  diffSummary: text('diff_summary'),
+  riskScore: real('risk_score'),
+  riskFactors: text('risk_factors'), // JSON string
+  deviationPercentage: real('deviation_percentage'),
+  status: text('status').notNull(), // 'identical', 'minor_change', 'significant_change', 'missing', 'added'
+});
+
+// Templates table
+export const templates = pgTable('templates', {
+  id: text('id').primaryKey(),
+  orgId: text('org_id').notNull().references(() => organizations.id),
+  contractId: text('contract_id').notNull().references(() => contracts.id),
+  name: text('name').notNull(),
+  templateType: text('template_type'),
+  description: text('description'),
+  isDefault: boolean('is_default').notNull().default(false),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+// Relations
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  contracts: many(contracts),
+  comparisons: many(comparisons),
+  templates: many(templates),
+}));
+
+export const contractsRelations = relations(contracts, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [contracts.orgId],
+    references: [organizations.id],
+  }),
+  clauses: many(clauses),
+  sourceComparisons: many(comparisons, { relationName: 'sourceContract' }),
+  targetComparisons: many(comparisons, { relationName: 'targetContract' }),
+  templates: many(templates),
+}));
+
+export const clausesRelations = relations(clauses, ({ one, many }) => ({
+  contract: one(contracts, {
+    fields: [clauses.contractId],
+    references: [contracts.id],
+  }),
+  sourceComparisons: many(clauseComparisons, { relationName: 'sourceClause' }),
+  targetComparisons: many(clauseComparisons, { relationName: 'targetClause' }),
+}));
+
+export const comparisonsRelations = relations(comparisons, ({ one, many }) => ({
+  organization: one(organizations, {
+    fields: [comparisons.orgId],
+    references: [organizations.id],
+  }),
+  sourceContract: one(contracts, {
+    fields: [comparisons.sourceContractId],
+    references: [contracts.id],
+    relationName: 'sourceContract',
+  }),
+  targetContract: one(contracts, {
+    fields: [comparisons.targetContractId],
+    references: [contracts.id],
+    relationName: 'targetContract',
+  }),
+  clauseComparisons: many(clauseComparisons),
+}));
+
+export const clauseComparisonsRelations = relations(clauseComparisons, ({ one }) => ({
+  comparison: one(comparisons, {
+    fields: [clauseComparisons.comparisonId],
+    references: [comparisons.id],
+  }),
+  sourceClause: one(clauses, {
+    fields: [clauseComparisons.sourceClauseId],
+    references: [clauses.id],
+    relationName: 'sourceClause',
+  }),
+  targetClause: one(clauses, {
+    fields: [clauseComparisons.targetClauseId],
+    references: [clauses.id],
+    relationName: 'targetClause',
+  }),
+}));
+
+export const templatesRelations = relations(templates, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [templates.orgId],
+    references: [organizations.id],
+  }),
+  contract: one(contracts, {
+    fields: [templates.contractId],
+    references: [contracts.id],
+  }),
+}));
+
+// Type exports
+export type Organization = typeof organizations.$inferSelect;
+export type NewOrganization = typeof organizations.$inferInsert;
+export type Contract = typeof contracts.$inferSelect;
+export type NewContract = typeof contracts.$inferInsert;
+export type Clause = typeof clauses.$inferSelect;
+export type NewClause = typeof clauses.$inferInsert;
+export type Comparison = typeof comparisons.$inferSelect;
+export type NewComparison = typeof comparisons.$inferInsert;
+export type ClauseComparison = typeof clauseComparisons.$inferSelect;
+export type NewClauseComparison = typeof clauseComparisons.$inferInsert;
+export type Template = typeof templates.$inferSelect;
+export type NewTemplate = typeof templates.$inferInsert;
