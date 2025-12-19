@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, ArrowRight, Loader2, AlertCircle, Shield, ExternalLink, TriangleAlert } from 'lucide-react';
+import { FileText, ArrowRight, Loader2, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -49,13 +49,7 @@ export default function Home() {
   const [inputMode, setInputMode] = useState<InputMode>('upload');
   
   // Comparison context for tracking active comparisons
-  const { isComparisonInProgress, activeComparison, setActiveComparison, clearActiveComparison } = useComparison();
-  
-  // Track if we just started a background comparison
-  const [backgroundComparisonStarted, setBackgroundComparisonStarted] = useState<{
-    id: string;
-    name: string;
-  } | null>(null);
+  const { isComparisonInProgress, activeComparison, setActiveComparison } = useComparison();
   
   // File upload state (separate from paste)
   const [templateFile, setTemplateFile] = useState<ContractFile | null>(null);
@@ -72,23 +66,6 @@ export default function Home() {
   const [comparison, setComparison] = useState<ComparisonResult | null>(null);
   const [selectedClauseType, setSelectedClauseType] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  
-  // Track when it's unsafe to navigate (during initial processing before DB save)
-  const [isUnsafeToNavigate, setIsUnsafeToNavigate] = useState(false);
-
-  // Browser warning when trying to close/navigate during critical processing
-  const handleBeforeUnload = useCallback((e: BeforeUnloadEvent) => {
-    if (isUnsafeToNavigate) {
-      e.preventDefault();
-      // Modern browsers ignore custom messages but still show a warning
-      return 'Your comparison is being saved. Are you sure you want to leave?';
-    }
-  }, [isUnsafeToNavigate]);
-
-  useEffect(() => {
-    window.addEventListener('beforeunload', handleBeforeUnload);
-    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
-  }, [handleBeforeUnload]);
 
   const handleTemplateSelect = (file: File, text: string) => {
     setTemplateFile({ name: file.name, text });
@@ -150,77 +127,23 @@ export default function Home() {
     }
 
     setIsProcessing(true);
-    setStep('processing');
     setError(null);
-    setBackgroundComparisonStarted(null);
-    setIsUnsafeToNavigate(true); // Don't navigate until comparison is saved
 
     try {
-      // Create template contract
-      const templateResponse = await fetch('/api/contracts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename: mode === 'upload' ? templateFile!.name : 'Original.txt',
-          name: sourceName,
-          isTemplate: true,
-          templateType: 'general',
-        }),
-      });
-      const templateData = await templateResponse.json();
-      
-      if (!templateResponse.ok) {
-        throw new Error(templateData.error || 'Failed to create template contract');
-      }
-
-      // Process template contract
-      const templateProcessResponse = await fetch(`/api/contracts/${templateData.contract.id}/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: sourceText }),
-      });
-      
-      if (!templateProcessResponse.ok) {
-        const errorData = await templateProcessResponse.json();
-        throw new Error(errorData.error || 'Failed to process template contract');
-      }
-
-      // Create redlined contract
-      const redlinedResponse = await fetch('/api/contracts', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          filename: mode === 'upload' ? redlinedFile!.name : 'Revised.txt',
-          name: targetName,
-        }),
-      });
-      const redlinedData = await redlinedResponse.json();
-      
-      if (!redlinedResponse.ok) {
-        throw new Error(redlinedData.error || 'Failed to create redlined contract');
-      }
-
-      // Process redlined contract
-      const redlinedProcessResponse = await fetch(`/api/contracts/${redlinedData.contract.id}/process`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: targetText }),
-      });
-      
-      if (!redlinedProcessResponse.ok) {
-        const errorData = await redlinedProcessResponse.json();
-        throw new Error(errorData.error || 'Failed to process redlined contract');
-      }
-
-      // Run comparison - use custom title if provided, otherwise use document names
-      // All comparisons now run in the background for better UX
+      // Use custom title if provided, otherwise use document names
       const comparisonDisplayName = comparisonTitle.trim() || `${sourceName} → ${targetName}`;
+
+      // Create comparison with all data - the API will handle processing in background
       const compareResponse = await fetch('/api/compare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          sourceContractId: templateData.contract.id,
-          targetContractId: redlinedData.contract.id,
+          sourceText,
+          targetText,
+          sourceName,
+          targetName,
+          sourceFilename: mode === 'upload' ? templateFile!.name : 'Original.txt',
+          targetFilename: mode === 'upload' ? redlinedFile!.name : 'Revised.txt',
           comparisonType: 'template_vs_redline',
           name: comparisonDisplayName,
         }),
@@ -228,7 +151,7 @@ export default function Home() {
       const compareData = await compareResponse.json();
       
       if (!compareResponse.ok) {
-        throw new Error(compareData.error || 'Failed to compare contracts');
+        throw new Error(compareData.error || 'Failed to start comparison');
       }
 
       // Track the active comparison in context
@@ -239,21 +162,12 @@ export default function Home() {
         startedAt: new Date().toISOString(),
       });
       
-      // Show the background comparison started notification
-      setBackgroundComparisonStarted({
-        id: compareData.comparison.id,
-        name: comparisonDisplayName,
-      });
-      
-      setIsProcessing(false);
-      setIsUnsafeToNavigate(false); // Now safe to navigate - comparison is saved
-      // Stay on processing step but show navigation options
+      // Immediately navigate to comparisons page to show the new comparison in processing state
+      router.push('/comparisons');
     } catch (err) {
       console.error('Comparison error:', err);
       setError(err instanceof Error ? err.message : 'An error occurred during comparison');
-      setStep('upload');
       setIsProcessing(false);
-      setIsUnsafeToNavigate(false); // Clear warning on error
     }
   };
 
@@ -267,8 +181,6 @@ export default function Home() {
     setComparison(null);
     setSelectedClauseType(null);
     setError(null);
-    setBackgroundComparisonStarted(null);
-    setIsUnsafeToNavigate(false);
     // Note: We intentionally don't clear activeComparison from context 
     // so the user can still track it in the Past Comparisons page
   };
@@ -398,10 +310,19 @@ export default function Home() {
                   <Button
                     size="lg"
                     onClick={() => runComparison('upload')}
-                    disabled={!canCompareUpload}
+                    disabled={!canCompareUpload || isProcessing}
                   >
-                    Compare Contracts
-                    <ArrowRight className="h-4 w-4" />
+                    {isProcessing ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        Compare Contracts
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
                   </Button>
                 </div>
               </div>
@@ -444,10 +365,19 @@ export default function Home() {
                     <Button
                       size="lg"
                       onClick={() => runComparison('paste')}
-                      disabled={!canComparePaste}
+                      disabled={!canComparePaste || isProcessing}
                     >
-                      Compare Contracts
-                      <ArrowRight className="h-4 w-4" />
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Starting...
+                        </>
+                      ) : (
+                        <>
+                          Compare Contracts
+                          <ArrowRight className="h-4 w-4" />
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardContent>
@@ -459,72 +389,15 @@ export default function Home() {
         {/* Processing Step */}
         {step === 'processing' && (
           <div className="max-w-lg mx-auto text-center py-16 space-y-6">
-            {/* Warning banner when unsafe to navigate */}
-            {isUnsafeToNavigate && (
-              <Alert className="border-orange-500/50 bg-orange-500/10 text-left">
-                <TriangleAlert className="h-4 w-4 text-orange-500" />
-                <AlertDescription className="text-orange-700 dark:text-orange-400">
-                  <strong>Please wait</strong> — Your comparison is being saved. Navigating away now may cause data loss.
-                </AlertDescription>
-              </Alert>
-            )}
-
             <Loader2 className="h-12 w-12 text-muted-foreground animate-spin mx-auto" />
             <div>
               <h2 className="text-xl font-semibold mb-2">
-                {backgroundComparisonStarted ? 'Comparison Started!' : 'Analyzing Contracts...'}
+                Preparing Comparison...
               </h2>
               <p className="text-muted-foreground">
-                {backgroundComparisonStarted 
-                  ? 'Your comparison is processing in the background. You can navigate away and check back later.'
-                  : 'Extracting clauses, comparing content, and assessing risk. This may take a moment.'
-                }
+                Creating contracts and starting comparison. You&apos;ll be redirected shortly.
               </p>
             </div>
-            
-            {/* Background comparison navigation options */}
-            {backgroundComparisonStarted && (
-              <Card className="text-left">
-                <CardContent className="pt-6 space-y-4">
-                  <div className="flex items-start gap-3 p-3 bg-primary/5 rounded-lg border border-primary/20">
-                    <div className="h-2 w-2 mt-2 rounded-full bg-primary animate-pulse" />
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">
-                        {backgroundComparisonStarted.name}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Processing in background...
-                      </p>
-                    </div>
-                  </div>
-                  
-                  <div className="flex flex-col sm:flex-row gap-3">
-                    <Button 
-                      variant="default" 
-                      className="flex-1"
-                      onClick={() => router.push('/comparisons')}
-                    >
-                      <ExternalLink className="h-4 w-4" />
-                      View All Comparisons
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      className="flex-1"
-                      onClick={() => {
-                        setBackgroundComparisonStarted(null);
-                        resetComparison();
-                      }}
-                    >
-                      Start Another Comparison
-                    </Button>
-                  </div>
-                  
-                  <p className="text-xs text-muted-foreground text-center">
-                    Results will appear in Past Comparisons when ready
-                  </p>
-                </CardContent>
-              </Card>
-            )}
           </div>
         )}
 
@@ -542,24 +415,19 @@ export default function Home() {
               <div className="flex items-center gap-4">
                 {/* Overall Risk Score */}
                 <div className="flex items-center gap-3 px-4 py-2 bg-card rounded-lg border">
-                  <Shield className="h-5 w-5 text-muted-foreground" />
-                  <div className="text-right">
-                    <div className="text-xs text-muted-foreground">Risk Score</div>
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        'text-xl font-bold',
-                        (comparison.overallRiskScore || 0) >= 75 ? 'text-red-600 dark:text-red-400' :
-                        (comparison.overallRiskScore || 0) >= 50 ? 'text-orange-600 dark:text-orange-400' :
-                        (comparison.overallRiskScore || 0) >= 25 ? 'text-yellow-600 dark:text-yellow-400' :
-                        'text-green-600 dark:text-green-400'
-                      )}>
-                        {comparison.overallRiskScore || 0}
-                      </span>
-                      <Badge variant={getRiskLevel(comparison.overallRiskScore || 0).variant}>
-                        {getRiskLevel(comparison.overallRiskScore || 0).label}
-                      </Badge>
-                    </div>
-                  </div>
+                  <div className="text-sm text-muted-foreground">Risk Score</div>
+                  <span className={cn(
+                    'text-xl font-bold',
+                    (comparison.overallRiskScore || 0) >= 75 ? 'text-red-600 dark:text-red-400' :
+                    (comparison.overallRiskScore || 0) >= 50 ? 'text-orange-600 dark:text-orange-400' :
+                    (comparison.overallRiskScore || 0) >= 25 ? 'text-yellow-600 dark:text-yellow-400' :
+                    'text-green-600 dark:text-green-400'
+                  )}>
+                    {comparison.overallRiskScore || 0}
+                  </span>
+                  <Badge variant={getRiskLevel(comparison.overallRiskScore || 0).variant}>
+                    {getRiskLevel(comparison.overallRiskScore || 0).label}
+                  </Badge>
                 </div>
                 <Button variant="outline" onClick={resetComparison}>
                   New Comparison

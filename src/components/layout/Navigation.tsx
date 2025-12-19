@@ -4,7 +4,7 @@ import React, { useState, useRef } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
-import { Scale, FilePlus, History, Palette, X, Upload, RotateCcw } from 'lucide-react';
+import { Scale, FilePlus, FolderOpen, Palette, X, Upload, RotateCcw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { useCustomization } from '@/lib/customization-context';
@@ -25,7 +25,7 @@ export function Navigation() {
 
   const navItems = [
     { href: '/', label: 'New Comparison', icon: FilePlus },
-    { href: '/comparisons', label: 'Past Comparisons', icon: History },
+    { href: '/comparisons', label: 'My Comparisons', icon: FolderOpen },
   ];
 
   const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {

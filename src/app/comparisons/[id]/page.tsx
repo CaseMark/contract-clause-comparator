@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { FileText, ArrowLeft, Loader2, AlertCircle, ChevronRight, Shield, Pencil, Check, X } from 'lucide-react';
+import { FileText, ArrowLeft, Loader2, AlertCircle, ChevronRight, Pencil, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -402,24 +402,19 @@ export default function ComparisonDetailPage() {
             <div className="flex items-center gap-4">
               {/* Overall Risk Score */}
               <div className="flex items-center gap-3 px-4 py-2 bg-card rounded-lg border">
-                <Shield className="h-5 w-5 text-muted-foreground" />
-                <div className="text-right">
-                  <div className="text-xs text-muted-foreground">Risk Score</div>
-                  <div className="flex items-center gap-2">
-                    <span className={cn(
-                      'text-xl font-bold',
-                      (comparison.overallRiskScore || 0) >= 75 ? 'text-red-600 dark:text-red-400' :
-                      (comparison.overallRiskScore || 0) >= 50 ? 'text-orange-600 dark:text-orange-400' :
-                      (comparison.overallRiskScore || 0) >= 25 ? 'text-yellow-600 dark:text-yellow-400' :
-                      'text-green-600 dark:text-green-400'
-                    )}>
-                      {comparison.overallRiskScore || 0}
-                    </span>
-                    <Badge variant={getRiskLevel(comparison.overallRiskScore || 0).variant}>
-                      {getRiskLevel(comparison.overallRiskScore || 0).label}
-                    </Badge>
-                  </div>
-                </div>
+                <div className="text-sm text-muted-foreground">Risk Score</div>
+                <span className={cn(
+                  'text-xl font-bold',
+                  (comparison.overallRiskScore || 0) >= 75 ? 'text-red-600 dark:text-red-400' :
+                  (comparison.overallRiskScore || 0) >= 50 ? 'text-orange-600 dark:text-orange-400' :
+                  (comparison.overallRiskScore || 0) >= 25 ? 'text-yellow-600 dark:text-yellow-400' :
+                  'text-green-600 dark:text-green-400'
+                )}>
+                  {comparison.overallRiskScore || 0}
+                </span>
+                <Badge variant={getRiskLevel(comparison.overallRiskScore || 0).variant}>
+                  {getRiskLevel(comparison.overallRiskScore || 0).label}
+                </Badge>
               </div>
               <Button variant="outline" asChild>
                 <Link href="/">New Comparison</Link>

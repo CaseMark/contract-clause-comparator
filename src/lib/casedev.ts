@@ -609,6 +609,79 @@ Analyze the significance of changes between these versions.`;
   }
 }
 
+// ============ SEMANTIC TAGGING ============
+
+export interface SemanticTag {
+  label: string;
+  category: 'contract_type' | 'industry' | 'risk_level' | 'key_terms' | 'parties' | 'status';
+  confidence: number;
+}
+
+export async function generateSemanticTags(
+  sourceContractName: string,
+  targetContractName: string,
+  summary: string | null,
+  clauseTypes: string[],
+  overallRiskScore: number | null
+): Promise<ApiResponse<SemanticTag[]>> {
+  const systemPrompt = `You are a legal document analyst. Generate semantic tags for a contract comparison to help with organization and search.
+
+Generate 3-6 relevant tags from these categories:
+1. contract_type: Type of contract (e.g., "NDA", "SaaS Agreement", "Employment", "Vendor Agreement", "License Agreement")
+2. industry: Industry sector if identifiable (e.g., "Technology", "Healthcare", "Finance", "Real Estate")
+3. risk_level: Overall risk assessment (e.g., "High Risk", "Low Risk", "Needs Review")
+4. key_terms: Key legal terms or provisions that stand out (e.g., "IP Transfer", "Non-Compete", "Liability Cap")
+5. parties: Type of parties involved if identifiable (e.g., "B2B", "Enterprise", "Startup")
+6. status: Comparison status indicators (e.g., "Major Changes", "Minor Revisions", "Standard Terms")
+
+Return ONLY valid JSON array:
+[
+  {"label": "SaaS Agreement", "category": "contract_type", "confidence": 0.95},
+  {"label": "Technology", "category": "industry", "confidence": 0.85},
+  {"label": "High Risk", "category": "risk_level", "confidence": 0.90}
+]`;
+
+  const riskLabel = overallRiskScore === null ? 'Unknown' :
+    overallRiskScore >= 75 ? 'Critical Risk' :
+    overallRiskScore >= 50 ? 'High Risk' :
+    overallRiskScore >= 25 ? 'Medium Risk' : 'Low Risk';
+
+  const userPrompt = `Generate semantic tags for this contract comparison:
+
+Source Contract: "${sourceContractName}"
+Target Contract: "${targetContractName}"
+Overall Risk Score: ${overallRiskScore ?? 'N/A'} (${riskLabel})
+Clause Types Analyzed: ${clauseTypes.join(', ')}
+${summary ? `Summary: ${summary}` : ''}
+
+Generate 3-6 relevant tags to categorize this comparison.`;
+
+  const response = await chatCompletion([
+    { role: 'system', content: systemPrompt },
+    { role: 'user', content: userPrompt },
+  ], {
+    model: 'anthropic/claude-sonnet-4.5',
+    max_tokens: 500,
+    temperature: 0,
+  });
+
+  if (response.error) {
+    return { error: response.error };
+  }
+
+  try {
+    const content = response.data?.choices[0]?.message?.content || '[]';
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      return { error: 'Failed to parse semantic tags response' };
+    }
+    const tags = JSON.parse(jsonMatch[0]) as SemanticTag[];
+    return { data: tags };
+  } catch (error) {
+    return { error: `Failed to parse semantic tags: ${error}` };
+  }
+}
+
 // ============ COMPARISON SUMMARY ============
 
 export async function generateComparisonSummary(
