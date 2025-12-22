@@ -37,9 +37,9 @@ export default function RootLayout({
               {children}
             </div>
             {/* Global Footer - Always at bottom */}
-            <footer className="border-t bg-background mt-auto">
-              <div className="container max-w-7xl py-6 text-center text-sm text-muted-foreground">
-                <p>Powered by Case.dev</p>
+            <footer className="bg-black mt-auto">
+              <div className="py-2 text-center text-xs text-white">
+                <p>powered with ❤️ by <a href="https://www.case.dev/" target="_blank" rel="noopener noreferrer" className="underline hover:text-gray-300">case.dev</a></p>
               </div>
             </footer>
           </ComparisonProvider>

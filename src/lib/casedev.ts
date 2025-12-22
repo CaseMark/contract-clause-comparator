@@ -4,7 +4,14 @@
  */
 
 const CASEDEV_API_URL = process.env.CASEDEV_API_URL || 'https://api.case.dev';
-const CASEDEV_API_KEY = process.env.CASEDEV_API_KEY || '';
+const CASEDEV_API_KEY = process.env.CASEDEV_API_KEY;
+
+// Validate API key is present
+function validateApiKey(): void {
+  if (!CASEDEV_API_KEY) {
+    throw new Error('CASEDEV_API_KEY environment variable is required. Get one at https://www.case.dev/#apis');
+  }
+}
 
 interface ApiResponse<T> {
   data?: T;
@@ -16,6 +23,7 @@ async function apiRequest<T>(
   options: RequestInit = {}
 ): Promise<ApiResponse<T>> {
   try {
+    validateApiKey();
     const response = await fetch(`${CASEDEV_API_URL}${endpoint}`, {
       ...options,
       headers: {

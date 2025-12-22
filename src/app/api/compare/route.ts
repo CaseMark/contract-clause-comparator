@@ -3,6 +3,13 @@ import { db, initializeDatabase, contracts, clauses, comparisons, clauseComparis
 import { eq } from 'drizzle-orm';
 import { analyzeClauseRisk, generateComparisonSummary, matchClausesSemantically, generateSemanticTags, extractClauses } from '@/lib/casedev';
 import { calculateOverallRisk, normalizeTextForComparison } from '@/lib/utils';
+import { 
+  createComparisonWithTextSchema, 
+  createComparisonWithIdsSchema, 
+  validateBody, 
+  ValidationError,
+  MAX_CONTRACT_TEXT_LENGTH 
+} from '@/lib/validations';
 import { v4 as uuidv4 } from 'uuid';
 import * as Diff from 'diff';
 
@@ -545,18 +552,30 @@ export async function POST(request: NextRequest) {
     await ensureDbInitialized();
     
     const body = await request.json();
-    const { 
-      // New format: raw text provided directly
-      sourceText, targetText, sourceName, targetName, sourceFilename, targetFilename,
-      // Legacy format: contract IDs provided
-      sourceContractId, targetContractId, 
-      // Common fields
-      comparisonType, name 
-    } = body;
-    const orgId = body.orgId || process.env.DEFAULT_ORG_ID || 'demo-org';
-
-    // New format: raw text provided - create contracts and process everything in background
-    if (sourceText && targetText) {
+    
+    // Determine which format is being used and validate accordingly
+    const hasTextInput = body.sourceText !== undefined || body.targetText !== undefined;
+    const hasIdInput = body.sourceContractId !== undefined || body.targetContractId !== undefined;
+    
+    // New format: raw text provided - validate and create contracts
+    if (hasTextInput) {
+      // Validate input with Zod schema
+      let validatedData;
+      try {
+        validatedData = validateBody(createComparisonWithTextSchema, body);
+      } catch (err) {
+        if (err instanceof ValidationError) {
+          return NextResponse.json({ error: err.message }, { status: 400 });
+        }
+        throw err;
+      }
+      
+      const { 
+        sourceText, targetText, sourceName, targetName, 
+        sourceFilename, targetFilename, comparisonType, name, orgId: inputOrgId 
+      } = validatedData;
+      const orgId = inputOrgId || process.env.DEFAULT_ORG_ID || 'demo-org';
+      
       // Create both contracts immediately (just DB records, no processing yet)
       const newSourceContractId = uuidv4();
       const newTargetContractId = uuidv4();
@@ -627,93 +646,109 @@ export async function POST(request: NextRequest) {
       });
     }
 
-    // Legacy format: contract IDs provided
-    if (!sourceContractId || !targetContractId) {
-      return NextResponse.json(
-        { error: 'Either provide sourceText/targetText or sourceContractId/targetContractId' },
-        { status: 400 }
-      );
-    }
+    // Legacy format: contract IDs provided - validate with schema
+    if (hasIdInput) {
+      let validatedData;
+      try {
+        validatedData = validateBody(createComparisonWithIdsSchema, body);
+      } catch (err) {
+        if (err instanceof ValidationError) {
+          return NextResponse.json({ error: err.message }, { status: 400 });
+        }
+        throw err;
+      }
+      
+      const { 
+        sourceContractId, targetContractId, comparisonType, name, orgId: inputOrgId 
+      } = validatedData;
+      const orgId = inputOrgId || process.env.DEFAULT_ORG_ID || 'demo-org';
 
-    // Get both contracts
-    const [sourceContract] = await db
-      .select()
-      .from(contracts)
-      .where(eq(contracts.id, sourceContractId));
-    
-    const [targetContract] = await db
-      .select()
-      .from(contracts)
-      .where(eq(contracts.id, targetContractId));
+      // Get both contracts
+      const [sourceContract] = await db
+        .select()
+        .from(contracts)
+        .where(eq(contracts.id, sourceContractId));
+      
+      const [targetContract] = await db
+        .select()
+        .from(contracts)
+        .where(eq(contracts.id, targetContractId));
 
-    if (!sourceContract || !targetContract) {
-      return NextResponse.json(
-        { error: 'One or both contracts not found' },
-        { status: 404 }
-      );
-    }
+      if (!sourceContract || !targetContract) {
+        return NextResponse.json(
+          { error: 'One or both contracts not found' },
+          { status: 404 }
+        );
+      }
 
-    if (sourceContract.ingestionStatus !== 'completed' || targetContract.ingestionStatus !== 'completed') {
-      return NextResponse.json(
-        { error: 'Both contracts must be processed before comparison' },
-        { status: 400 }
-      );
-    }
+      if (sourceContract.ingestionStatus !== 'completed' || targetContract.ingestionStatus !== 'completed') {
+        return NextResponse.json(
+          { error: 'Both contracts must be processed before comparison' },
+          { status: 400 }
+        );
+      }
 
-    // Get clauses for both contracts
-    const sourceClauses = await db
-      .select()
-      .from(clauses)
-      .where(eq(clauses.contractId, sourceContractId));
-    
-    const targetClauses = await db
-      .select()
-      .from(clauses)
-      .where(eq(clauses.contractId, targetContractId));
+      // Get clauses for both contracts
+      const sourceClauses = await db
+        .select()
+        .from(clauses)
+        .where(eq(clauses.contractId, sourceContractId));
+      
+      const targetClauses = await db
+        .select()
+        .from(clauses)
+        .where(eq(clauses.contractId, targetContractId));
 
-    // Create comparison record with 'processing' status
-    const comparisonId = uuidv4();
-    await db.insert(comparisons).values({
-      id: comparisonId,
-      orgId,
-      name: name || null,
-      sourceContractId,
-      targetContractId,
-      comparisonType: comparisonType || 'template_vs_redline',
-      comparisonStatus: 'processing',
-    });
-
-    // Always use background processing - fire and forget
-    processComparisonInBackground(
-      comparisonId,
-      sourceContract,
-      targetContract,
-      sourceClauses,
-      targetClauses
-    ).catch(err => {
-      console.error('Background comparison error:', err);
-    });
-
-    // Return immediately with the comparison ID and processing status
-    return NextResponse.json({
-      comparison: {
+      // Create comparison record with 'processing' status
+      const comparisonId = uuidv4();
+      await db.insert(comparisons).values({
         id: comparisonId,
+        orgId,
         name: name || null,
+        sourceContractId,
+        targetContractId,
+        comparisonType: comparisonType || 'template_vs_redline',
         comparisonStatus: 'processing',
-        sourceContract: {
-          id: sourceContract.id,
-          name: sourceContract.name,
-          filename: sourceContract.filename,
+      });
+
+      // Always use background processing - fire and forget
+      processComparisonInBackground(
+        comparisonId,
+        sourceContract,
+        targetContract,
+        sourceClauses,
+        targetClauses
+      ).catch(err => {
+        console.error('Background comparison error:', err);
+      });
+
+      // Return immediately with the comparison ID and processing status
+      return NextResponse.json({
+        comparison: {
+          id: comparisonId,
+          name: name || null,
+          comparisonStatus: 'processing',
+          sourceContract: {
+            id: sourceContract.id,
+            name: sourceContract.name,
+            filename: sourceContract.filename,
+          },
+          targetContract: {
+            id: targetContract.id,
+            name: targetContract.name,
+            filename: targetContract.filename,
+          },
+          createdAt: new Date().toISOString(),
         },
-        targetContract: {
-          id: targetContract.id,
-          name: targetContract.name,
-          filename: targetContract.filename,
-        },
-        createdAt: new Date().toISOString(),
-      },
-      background: true,
-    });
+        background: true,
+      });
+    }
+    
+    // Neither format provided
+    return NextResponse.json(
+      { error: 'Either provide sourceText/targetText or sourceContractId/targetContractId' },
+      { status: 400 }
+    );
   } catch (error) {
     console.error('Error comparing contracts:', error);
     return NextResponse.json(

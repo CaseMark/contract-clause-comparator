@@ -1,11 +1,14 @@
 import { defineConfig } from 'drizzle-kit';
 
+if (!process.env.DATABASE_URL) {
+  throw new Error('DATABASE_URL environment variable is required for database migrations.');
+}
+
 export default defineConfig({
   schema: './src/lib/db/schema.ts',
   out: './drizzle',
   dialect: 'postgresql',
   dbCredentials: {
-    url: process.env.DATABASE_URL || 'postgresql://localhost:5432/conclausecompare',
+    url: process.env.DATABASE_URL,
   },
 });
-

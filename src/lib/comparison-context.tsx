@@ -22,7 +22,7 @@ const ComparisonContext = createContext<ComparisonContextType | undefined>(undef
 export function ComparisonProvider({ children }: { children: ReactNode }) {
   const [activeComparison, setActiveComparisonState] = useState<ActiveComparison | null>(null);
 
-  // Load active comparison from localStorage on mount
+  // Load active comparison from localStorage on mount and verify it still exists
   useEffect(() => {
     const stored = localStorage.getItem('activeComparison');
     if (stored) {
@@ -30,7 +30,34 @@ export function ComparisonProvider({ children }: { children: ReactNode }) {
         const parsed = JSON.parse(stored);
         // Only restore if it's still in progress
         if (parsed.status === 'pending' || parsed.status === 'processing') {
-          setActiveComparisonState(parsed);
+          // Verify the comparison still exists in the database
+          fetch(`/api/compare/${parsed.id}/status`)
+            .then(response => {
+              if (response.ok) {
+                return response.json();
+              }
+              // Comparison doesn't exist anymore - clear it
+              localStorage.removeItem('activeComparison');
+              return null;
+            })
+            .then(data => {
+              if (data) {
+                if (data.status === 'completed' || data.status === 'failed') {
+                  // Comparison finished - clear it
+                  localStorage.removeItem('activeComparison');
+                } else {
+                  // Comparison still in progress - restore it
+                  setActiveComparisonState({
+                    ...parsed,
+                    status: data.status,
+                  });
+                }
+              }
+            })
+            .catch(() => {
+              // Error fetching - clear the stale state
+              localStorage.removeItem('activeComparison');
+            });
         } else {
           localStorage.removeItem('activeComparison');
         }
@@ -67,6 +94,9 @@ export function ComparisonProvider({ children }: { children: ReactNode }) {
             status: data.status,
           });
         }
+      } else if (response.status === 404) {
+        // Comparison was deleted - clear the active state
+        clearActiveComparison();
       }
     } catch (error) {
       console.error('Error polling comparison status:', error);

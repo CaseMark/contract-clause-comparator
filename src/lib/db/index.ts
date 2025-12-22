@@ -2,8 +2,12 @@ import { Pool } from 'pg';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from './schema';
 
-// PostgreSQL connection string
-const connectionString = process.env.DATABASE_URL || 'postgresql://localhost:5432/conclausecompare';
+// PostgreSQL connection string - REQUIRED for production
+const connectionString = process.env.DATABASE_URL;
+
+if (!connectionString) {
+  throw new Error('DATABASE_URL environment variable is required. Please set it in your .env file or Vercel environment variables.');
+}
 
 // Create PostgreSQL connection pool
 const pool = new Pool({
