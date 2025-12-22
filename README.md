@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Contract Clause Comparator
 
-## Getting Started
+**Compare contracts in seconds, not hours.** Upload your template and a redlined version to instantly see what changed, assess risk, and make informed decisions.
 
-First, run the development server:
+![Powered by Case.dev](https://img.shields.io/badge/Powered%20by-Case.dev-blue)
+
+## ✨ Features
+
+- **Automatic clause extraction** — AI identifies indemnification, liability, confidentiality, and 12+ other clause types
+- **Semantic matching** — Finds corresponding clauses even when reorganized
+- **Side-by-side diffs** — See exactly what was added, removed, or modified
+- **Risk scoring** — Each change gets a score (0-100) based on legal significance
+- **Executive summaries** — AI-generated overview of the most important changes
+
+## 🚀 Quick Start
 
 ```bash
+# Clone and install
+git clone https://github.com/CaseMark/contract-clause-comparator.git
+cd contract-clause-comparator
+npm install
+
+# Configure environment
+cp .env.example .env
+# Edit .env with your DATABASE_URL and CASEDEV_API_KEY
+
+# Run
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000) and start comparing!
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🔌 Powered by Case.dev
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This app showcases [Case.dev](https://www.case.dev) — the API platform for legal technology.
 
-## Learn More
+**LLM API Features Used:**
+- Clause extraction and classification
+- Semantic clause matching across documents  
+- Risk analysis with legal significance scoring
+- Executive summary generation
+- Automatic semantic tagging
 
-To learn more about Next.js, take a look at the following resources:
+Get your API key at [case.dev](https://www.case.dev/#apis)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🚢 Deploy
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/CaseMark/contract-clause-comparator)
 
-## Deploy on Vercel
+Add these environment variables:
+- `DATABASE_URL` — PostgreSQL connection string ([neon.tech](https://neon.tech) offers free tier)
+- `CASEDEV_API_KEY` — Your Case.dev API key
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## 🛠 Tech Stack
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Next.js 14 • PostgreSQL • Drizzle ORM • Tailwind CSS • Case.dev LLM API
+
+---
+
+<p align="center">
+  Built with ❤️ using <a href="https://www.case.dev">Case.dev</a>
+</p>
