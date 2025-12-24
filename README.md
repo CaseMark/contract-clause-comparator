@@ -46,9 +46,9 @@ Get your API key at [case.dev](https://www.case.dev/#apis)
 
 ## 🚢 Deploy
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/CaseMark/contract-clause-comparator)
+Deploy this app using the [Case.dev Console](https://case.dev/console).
 
-Add these environment variables:
+Required environment variables:
 - `DATABASE_URL` — PostgreSQL connection string ([neon.tech](https://neon.tech) offers free tier)
 - `CASEDEV_API_KEY` — Your Case.dev API key
 
