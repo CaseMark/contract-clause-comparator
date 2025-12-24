@@ -3,6 +3,7 @@
 **Compare contracts in seconds, not hours.** Upload your template and a redlined version to instantly see what changed, assess risk, and make informed decisions.
 
 ![Powered by Case.dev](https://img.shields.io/badge/Powered%20by-Case.dev-blue)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 
 ## ✨ Features
 
@@ -54,6 +55,10 @@ Add these environment variables:
 ## 🛠 Tech Stack
 
 Next.js 14 • PostgreSQL • Drizzle ORM • Tailwind CSS • Case.dev LLM API
+
+## 📄 License
+
+This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
 
 ---
 
